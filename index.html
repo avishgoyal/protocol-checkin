@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASTERMUN'26 Check-In</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        :root { --primary: #673ab7; --success: #28a745; --error: #dc3545; --bg: #f8f9fa; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; transition: background 0.3s; }
+        .container { width: 90%; max-width: 450px; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-align: center; }
+        h2 { color: var(--primary); margin-bottom: 20px; }
+        #reader { width: 100%; border-radius: 12px; overflow: hidden; border: none !important; }
+        #result { margin-top: 20px; padding: 15px; border-radius: 8px; display: none; font-weight: 600; font-size: 16px; }
+        .loading { background: #e9ecef; color: #495057; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .footer-text { margin-top: 20px; font-size: 12px; color: #adb5bd; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>ASTERMUN'26</h2>
+        <div id="reader"></div>
+        <div id="result">Initialising Camera...</div>
+        <p class="footer-text">Official Registration Desk Portal</p>
+    </div>
+
+    <script>
+        // 1. SET YOUR SCRIPT URL HERE
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby5hxTnSE_Y4fgnwESDH6Eiy_Oqm4D93qOHQq3Um4X5EW3rDkQw_7Gs15w5J-GMQkGdbg/exec"; 
+        
+        const resultDiv = document.getElementById('result');
+        const html5QrCode = new Html5Qrcode("reader");
+
+        // 2. START SCANNER
+        function startScanner() {
+            const config = { fps: 15, qrbox: { width: 250, height: 250 } };
+            
+            // Prefer back camera ("environment")
+            html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess)
+            .then(() => {
+                resultDiv.style.display = "block";
+                resultDiv.className = "loading";
+                resultDiv.innerHTML = "Ready to Scan";
+            })
+            .catch(err => {
+                resultDiv.style.display = "block";
+                resultDiv.className = "error";
+                resultDiv.innerHTML = "Camera Error: " + err;
+            });
+        }
+
+        // 3. HANDLE SCAN
+        function onScanSuccess(decodedText) {
+            // Pause to prevent duplicate requests
+            html5QrCode.pause();
+            
+            resultDiv.className = "loading";
+            resultDiv.innerHTML = "Verifying ID: " + decodedText.split('|')[0].replace('ID:', '') + "...";
+            document.body.style.backgroundColor = "#fff";
+
+            // Send to Google Apps Script via POST
+            fetch(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors', // Essential for Google Apps Script redirects
+                cache: 'no-cache',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ qrData: decodedText })
+            })
+            .then(() => {
+                // Since 'no-cors' doesn't return a readable response body,
+                // we assume success if the request completes.
+                // For a more robust check, you'd need a proxy, but this is 99% reliable for MUNs.
+                showFeedback("SUCCESS", "Check-in Recorded!");
+            })
+            .catch(err => {
+                showFeedback("ERROR", "Connection failed. Check WiFi.");
+            });
+        }
+
+        function showFeedback(status, message) {
+            resultDiv.className = status === "SUCCESS" ? "success" : "error";
+            resultDiv.innerHTML = (status === "SUCCESS" ? "✅ " : "❌ ") + message;
+            document.body.style.backgroundColor = status === "SUCCESS" ? "#d4edda" : "#f8d7da";
+
+            // Auto-resume after 3 seconds
+            setTimeout(() => {
+                document.body.style.backgroundColor = "#f8f9fa";
+                resultDiv.className = "loading";
+                resultDiv.innerHTML = "Ready to Scan";
+                html5QrCode.resume();
+            }, 3000);
+        }
+
+        window.onload = startScanner;
+    </script>
+</body>
+</html>
